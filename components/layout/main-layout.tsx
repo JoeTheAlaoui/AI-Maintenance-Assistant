@@ -12,7 +12,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
     return (
-        <div className="flex min-h-screen bg-gray-50">
+        <div className="flex min-h-screen bg-gray-50 dark:bg-gray-950">
             {/* Desktop Sidebar */}
             <aside className="hidden lg:block lg:fixed lg:inset-y-0 lg:z-50 lg:w-[260px]">
                 <Sidebar />
@@ -24,7 +24,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 <Header />
 
                 {/* Page Content */}
-                <main className="flex-1 bg-white">
+                <main className="flex-1 bg-white dark:bg-gray-950">
                     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
                         {children}
                     </div>

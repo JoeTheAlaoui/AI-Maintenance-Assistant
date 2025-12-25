@@ -7,9 +7,46 @@ const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY!
 });
 
+function detectMessageLanguage(text: string): string {
+    const arabicChars = text.match(/[\u0600-\u06FF]/g);
+    const arabicRatio = arabicChars ? arabicChars.length / text.length : 0;
+
+    const darijaKeywords = [
+        'شنو', 'كيفاش', 'واش', 'اللي', 'ديال', 'غادي', 'عندنا', 'دابا',
+        'chno', 'kifach', 'wach', 'lli', 'li', 'dial', 'ghadi', 'bghit', '3and'
+    ];
+
+    const isDarija = darijaKeywords.some(kw =>
+        text.toLowerCase().includes(kw.toLowerCase())
+    );
+
+    if (isDarija) {
+        return 'Darija (Moroccan Arabic with French/Arabic mix)';
+    }
+
+    if (arabicRatio > 0.3) {
+        return 'Arabic';
+    }
+
+    const frenchWords = ['le', 'la', 'les', 'un', 'une', 'des', 'est', 'problème', 'compresseur'];
+    const hasFrench = frenchWords.some(word =>
+        new RegExp(`\\b${word}\\b`, 'i').test(text)
+    );
+
+    if (hasFrench) {
+        return 'French';
+    }
+
+    return 'English';
+}
+
 export async function POST(req: NextRequest) {
     try {
         const { message, conversationHistory } = await req.json();
+
+        // Detect user's language
+        const userLanguage = detectMessageLanguage(message);
+        console.log(`[AI Triage] Detected user language: ${userLanguage}`);
 
         const cookieStore = await cookies();
         const supabase = createClient(cookieStore);
@@ -62,6 +99,24 @@ export async function POST(req: NextRequest) {
         // ═══════════════════════════════════════════════════
 
         const systemPrompt = `You are an **Expert Maintenance Triage Assistant** for industrial equipment.
+
+# CRITICAL: LANGUAGE MATCHING RULE
+**ALWAYS respond in the SAME language the user is speaking.**
+
+If user speaks in:
+- French → Respond in French
+- Arabic → Respond in Arabic
+- Darija (Moroccan Arabic) → Respond in Darija (mix of Arabic script + French technical terms)
+- English → Respond in English
+
+Detect the language from the user's message and adapt your response accordingly.
+
+Examples:
+User: "شنو المشكل في الكومبريسور؟"
+You: "واش هو الكومبريسور ديال FIAC ولا B-300؟" (Respond in Darija)
+
+User: "Il y a un problème avec le compresseur"
+You: "De quel compresseur parlez-vous exactement?" (Respond in French)
 
 # YOUR MISSION
 Help maintenance technicians quickly identify:
@@ -171,13 +226,15 @@ CRITICAL: Always respond with valid JSON. Never include text outside the JSON st
         ];
 
         // ═══════════════════════════════════════════════════
-        // STEP 4: CALL CLAUDE API
+        // STEP 4: CALL CLAUDE API WITH LANGUAGE INSTRUCTION
         // ═══════════════════════════════════════════════════
+
+        const languageInstruction = `\n\nIMPORTANT: The user is speaking in ${userLanguage}. You MUST respond in ${userLanguage}.`;
 
         const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4096,
-            system: systemPrompt,
+            system: systemPrompt + languageInstruction,
             messages: messages
         });
 
@@ -214,7 +271,8 @@ CRITICAL: Always respond with valid JSON. Never include text outside the JSON st
         return NextResponse.json({
             response: structuredOutput,
             rawText: aiText,
-            messageId: response.id
+            messageId: response.id,
+            detectedLanguage: userLanguage
         });
 
     } catch (error) {

@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Database } from '@/types/database.types'
 
+// Server client with full type safety
 export const createClient = (cookieStore: Awaited<ReturnType<typeof cookies>>) => {
     return createServerClient<Database>(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,3 +27,4 @@ export const createClient = (cookieStore: Awaited<ReturnType<typeof cookies>>) =
         }
     )
 }
+

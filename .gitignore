@@ -32,6 +32,25 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# API Keys & Secrets
+**/api-keys.json
+**/secrets.json
+**/.secrets
+**/config/keys.ts
+**/config/secrets.ts
+
+# Supabase Local
+.supabase/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
 # vercel
 .vercel
@@ -39,3 +58,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDEs
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log

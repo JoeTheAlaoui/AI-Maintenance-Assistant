@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { VoiceInput } from './voice-input';
 
 // ═══════════════════════════════════════════════════
 // TYPES
@@ -82,6 +83,7 @@ export function AITriageChat() {
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [workOrderCreated, setWorkOrderCreated] = useState(false);
+    const [userLanguage, setUserLanguage] = useState<string>('fr');
 
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -442,15 +444,23 @@ export function AITriageChat() {
                         />
                     </div>
 
-                    {/* Voice Button */}
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="rounded-xl border-2 h-12 w-12 flex-shrink-0"
-                        title="Saisie vocale"
-                    >
-                        <Mic className="h-5 w-5" />
-                    </Button>
+                    {/* Voice Input Component */}
+                    <VoiceInput
+                        onTranscript={(text, metadata) => {
+                            // Update detected language
+                            if (metadata?.detectedLanguage) {
+                                setUserLanguage(metadata.detectedLanguage);
+                                console.log('[Chat] User language updated:', metadata.detectedLanguage);
+                            }
+
+                            // Add transcribed text
+                            setInput((prev) => prev + (prev ? ' ' : '') + text);
+
+                            setTimeout(() => inputRef.current?.focus(), 100);
+                        }}
+                        autoDetectLanguage={true}
+                        preferredLanguage="auto"
+                    />
 
                     {/* Send Button */}
                     <Button

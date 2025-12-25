@@ -71,25 +71,25 @@
 }
 
 .dark {
-  --background: 222 47% 11%;
+  --background: 224 71% 4%;
   --foreground: 210 40% 98%;
-  --card: 217 33% 17%;
+  --card: 222 47% 8%;
   --card-foreground: 210 40% 98%;
-  --popover: 217 33% 17%;
+  --popover: 222 47% 8%;
   --popover-foreground: 210 40% 98%;
   --primary: 217 91% 60%;
-  --primary-foreground: 222 47% 11%;
-  --secondary: 217 33% 17%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 215 28% 17%;
   --secondary-foreground: 210 40% 98%;
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 65%;
-  --accent: 217 33% 17%;
+  --muted: 215 28% 17%;
+  --muted-foreground: 217 10% 64%;
+  --accent: 215 28% 17%;
   --accent-foreground: 210 40% 98%;
-  --destructive: 0 63% 31%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217 33% 17%;
-  --input: 217 33% 17%;
-  --ring: 213 27% 84%;
+  --destructive: 0 62% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 215 28% 17%;
+  --input: 215 28% 17%;
+  --ring: 217 91% 60%;
 }
 
 @layer base {
@@ -104,6 +104,24 @@
 
   html {
     scroll-behavior: smooth;
+  }
+
+  /* Text Selection */
+  ::selection {
+    background-color: #3b82f6;
+    color: white;
+  }
+
+  .dark ::selection {
+    background-color: #60a5fa;
+    color: white;
+  }
+
+  /* Input selection */
+  input::selection,
+  textarea::selection {
+    background-color: #3b82f6;
+    color: white;
   }
 
   /* Custom Scrollbar */
@@ -123,6 +141,19 @@
 
   ::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+  }
+
+  /* Dark mode scrollbar */
+  .dark ::-webkit-scrollbar-track {
+    background: #1e293b;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: #475569;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
   }
 }
 
@@ -168,6 +199,11 @@
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
+.dark .glass {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .glass-card {
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(24px);
@@ -175,6 +211,11 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   border-radius: 1rem;
+}
+
+.dark .glass-card {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* ===== FLOATING ANIMATION ===== */

@@ -14,138 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
-      assets: {
-        Row: {
-          code: string
-          created_at: string | null
-          id: string
-          image_url: string | null
-          location: string
-          name: string
-          status: string | null
-          // Enhanced extraction fields
-          manufacturer: string | null
-          model_number: string | null
-          serial_number: string | null
-          category: string | null
-          criticality: string | null
-          specifications: Json | null
-          model_configurations: Json | null
-          integrated_subsystems: Json | null
-          electrical_components: Json | null
-          motor_protection_settings: Json | null
-          diagnostic_codes: Json | null
-          specification_tables: Json | null
-          completeness_score: number | null
-          extraction_metadata: Json | null
-          ai_extraction_id: string | null
-        }
-        Insert: {
-          code: string
-          created_at?: string | null
-          id?: string
-          image_url?: string | null
-          location: string
-          name: string
-          status?: string | null
-          // Enhanced extraction fields (all optional)
-          manufacturer?: string | null
-          model_number?: string | null
-          serial_number?: string | null
-          category?: string | null
-          criticality?: string | null
-          specifications?: Json | null
-          model_configurations?: Json | null
-          integrated_subsystems?: Json | null
-          electrical_components?: Json | null
-          motor_protection_settings?: Json | null
-          diagnostic_codes?: Json | null
-          specification_tables?: Json | null
-          completeness_score?: number | null
-          extraction_metadata?: Json | null
-          ai_extraction_id?: string | null
-        }
-        Update: {
-          code?: string
-          created_at?: string | null
-          id?: string
-          image_url?: string | null
-          location?: string
-          name?: string
-          status?: string | null
-          // Enhanced extraction fields
-          manufacturer?: string | null
-          model_number?: string | null
-          serial_number?: string | null
-          category?: string | null
-          criticality?: string | null
-          specifications?: Json | null
-          model_configurations?: Json | null
-          integrated_subsystems?: Json | null
-          electrical_components?: Json | null
-          motor_protection_settings?: Json | null
-          diagnostic_codes?: Json | null
-          specification_tables?: Json | null
-          completeness_score?: number | null
-          extraction_metadata?: Json | null
-          ai_extraction_id?: string | null
-        }
-        Relationships: []
-      }
       ai_extractions: {
         Row: {
-          id: string
-          profile_id: string
-          file_name: string
-          file_url: string
-          file_type: string
-          model_used: string
-          tokens_used: number
-          cost_usd: number
           confidence_score: number | null
-          extracted_assets_count: number
-          extracted_components_count: number
-          extracted_parts_count: number
-          raw_response: Json
-          processing_time_ms: number | null
           created_at: string | null
-          updated_at: string | null
+          file_name: string | null
+          id: string
+          model_used: string | null
+          profile_id: string
+          tokens_used: number | null
         }
         Insert: {
-          id?: string
-          profile_id: string
-          file_name: string
-          file_url: string
-          file_type: string
-          model_used?: string
-          tokens_used: number
-          cost_usd: number
           confidence_score?: number | null
-          extracted_assets_count?: number
-          extracted_components_count?: number
-          extracted_parts_count?: number
-          raw_response: Json
-          processing_time_ms?: number | null
           created_at?: string | null
-          updated_at?: string | null
+          file_name?: string | null
+          id?: string
+          model_used?: string | null
+          profile_id: string
+          tokens_used?: number | null
         }
         Update: {
-          id?: string
-          profile_id?: string
-          file_name?: string
-          file_url?: string
-          file_type?: string
-          model_used?: string
-          tokens_used?: number
-          cost_usd?: number
           confidence_score?: number | null
-          extracted_assets_count?: number
-          extracted_components_count?: number
-          extracted_parts_count?: number
-          raw_response?: Json
-          processing_time_ms?: number | null
           created_at?: string | null
-          updated_at?: string | null
+          file_name?: string | null
+          id?: string
+          model_used?: string | null
+          profile_id?: string
+          tokens_used?: number | null
         }
         Relationships: [
           {
@@ -154,11 +49,264 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          }
+          },
+        ]
+      }
+      asset_aliases: {
+        Row: {
+          id: string
+          asset_id: string
+          alias: string
+          alias_normalized: string
+          language: string | null
+          is_primary: boolean | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          asset_id: string
+          alias: string
+          alias_normalized?: string
+          language?: string | null
+          is_primary?: boolean | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          asset_id?: string
+          alias?: string
+          alias_normalized?: string
+          language?: string | null
+          is_primary?: boolean | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_aliases_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_documents: {
+        Row: {
+          asset_id: string | null
+          created_at: string | null
+          file_name: string
+          file_size: number | null
+          file_url: string | null
+          id: string
+          processed_at: string | null
+          processing_status: string | null
+          total_chunks: number | null
+        }
+        Insert: {
+          asset_id?: string | null
+          created_at?: string | null
+          file_name: string
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          processed_at?: string | null
+          processing_status?: string | null
+          total_chunks?: number | null
+        }
+        Update: {
+          asset_id?: string | null
+          created_at?: string | null
+          file_name?: string
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          processed_at?: string | null
+          processing_status?: string | null
+          total_chunks?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_documents_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assets: {
+        Row: {
+          ai_extraction_id: string | null
+          category: string | null
+          code: string
+          completeness_score: number | null
+          components: Json | null
+          created_at: string | null
+          created_by: string | null
+          criticality: string | null
+          depth: number | null
+          diagnostic_codes: Json | null
+          electrical_components: Json | null
+          extraction_confidence: number | null
+          extraction_metadata: Json | null
+          full_maintenance_schedule: Json | null
+          id: string
+          image_url: string | null
+          installation_date: string | null
+          integrated_subsystems: Json | null
+          level: string | null
+          location: string
+          manufacturer: string | null
+          metadata: Json | null
+          model_configurations: Json | null
+          model_number: string | null
+          motor_protection_settings: Json | null
+          name: string
+          organization_id: string | null
+          parent_id: string | null
+          path: string | null
+          pdf_filename: string | null
+          purchase_date: string | null
+          serial_number: string | null
+          specification_tables: Json | null
+          specifications: Json | null
+          status: string | null
+          updated_at: string | null
+          updated_by: string | null
+          warranty_expiry: string | null
+        }
+        Insert: {
+          ai_extraction_id?: string | null
+          category?: string | null
+          code: string
+          completeness_score?: number | null
+          components?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          criticality?: string | null
+          depth?: number | null
+          diagnostic_codes?: Json | null
+          electrical_components?: Json | null
+          extraction_confidence?: number | null
+          extraction_metadata?: Json | null
+          full_maintenance_schedule?: Json | null
+          id?: string
+          image_url?: string | null
+          installation_date?: string | null
+          integrated_subsystems?: Json | null
+          level?: string | null
+          location: string
+          manufacturer?: string | null
+          metadata?: Json | null
+          model_configurations?: Json | null
+          model_number?: string | null
+          motor_protection_settings?: Json | null
+          name: string
+          organization_id?: string | null
+          parent_id?: string | null
+          path?: string | null
+          pdf_filename?: string | null
+          purchase_date?: string | null
+          serial_number?: string | null
+          specification_tables?: Json | null
+          specifications?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          warranty_expiry?: string | null
+        }
+        Update: {
+          ai_extraction_id?: string | null
+          category?: string | null
+          code?: string
+          completeness_score?: number | null
+          components?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          criticality?: string | null
+          depth?: number | null
+          diagnostic_codes?: Json | null
+          electrical_components?: Json | null
+          extraction_confidence?: number | null
+          extraction_metadata?: Json | null
+          full_maintenance_schedule?: Json | null
+          id?: string
+          image_url?: string | null
+          installation_date?: string | null
+          integrated_subsystems?: Json | null
+          level?: string | null
+          location?: string
+          manufacturer?: string | null
+          metadata?: Json | null
+          model_configurations?: Json | null
+          model_number?: string | null
+          motor_protection_settings?: Json | null
+          name?: string
+          organization_id?: string | null
+          parent_id?: string | null
+          path?: string | null
+          pdf_filename?: string | null
+          purchase_date?: string | null
+          serial_number?: string | null
+          specification_tables?: Json | null
+          specifications?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          warranty_expiry?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_ai_extraction_id_fkey"
+            columns: ["ai_extraction_id"]
+            isOneToOne: false
+            referencedRelation: "ai_extractions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_chunks: {
+        Row: {
+          asset_id: string | null
+          chunk_index: number
+          content: string
+          created_at: string | null
+          embedding: string | null
+          id: string
+          metadata: Json | null
+          page_number: number | null
+        }
+        Insert: {
+          asset_id?: string | null
+          chunk_index: number
+          content: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          page_number?: number | null
+        }
+        Update: {
+          asset_id?: string | null
+          chunk_index?: number
+          content?: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          page_number?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_chunks_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
         ]
       }
       inventory: {
-
         Row: {
           created_at: string | null
           id: string
@@ -194,6 +342,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          organization_id: string | null
           role: string | null
         }
         Insert: {
@@ -201,6 +350,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          organization_id?: string | null
           role?: string | null
         }
         Update: {
@@ -208,6 +358,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          organization_id?: string | null
           role?: string | null
         }
         Relationships: []
@@ -307,7 +458,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      match_document_chunks: {
+        Args: {
+          match_asset_id: string
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: string
+          metadata: Json
+          similarity: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

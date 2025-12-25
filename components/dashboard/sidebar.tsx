@@ -1,24 +1,52 @@
 'use client'
 
+import { useState, useEffect, createContext, useContext } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { isFeatureEnabled, type FeatureFlag } from '@/config/features'
+import { createClient } from '@/lib/supabase/client'
 import {
     Home,
     QrCode,
     MessageSquare,
     Package,
-    Sparkles,
+    Upload,
     Settings,
     LogOut,
-    Zap,
+    ChevronLeft,
     ChevronRight,
-    TrendingUp
+    Sparkles,
+    User,
+    Loader2
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+
+// Sidebar context for collapse state
+const SidebarContext = createContext<{
+    collapsed: boolean
+    setCollapsed: (value: boolean) => void
+}>({
+    collapsed: false,
+    setCollapsed: () => { }
+})
+
+export const useSidebar = () => useContext(SidebarContext)
 
 interface NavItemConfig {
     href: string
@@ -26,59 +54,171 @@ interface NavItemConfig {
     label: string
     feature: FeatureFlag | null
     badge?: string
-    badgeVariant?: 'default' | 'success'
-    description?: string
-    highlight?: boolean
+    section: 'main' | 'tools' | 'settings'
 }
 
 const navigationItems: NavItemConfig[] = [
+    // Main
     {
         href: '/dashboard',
         icon: Home,
-        label: 'Home',
+        label: 'Accueil',
         feature: null,
-        description: 'Dashboard'
-    },
-    {
-        href: '/scan',
-        icon: QrCode,
-        label: 'Scan QR',
-        feature: 'QR_SCANNING',
-        badge: 'Start',
-        badgeVariant: 'success',
-        description: 'Scan equipment'
-    },
-    {
-        href: '/assistant',
-        icon: MessageSquare,
-        label: 'AI Assistant',
-        feature: 'AI_ASSISTANT',
-        badge: 'AI',
-        badgeVariant: 'default',
-        description: 'Chat with expert',
-        highlight: true
+        section: 'main'
     },
     {
         href: '/assets',
         icon: Package,
-        label: 'Equipment',
+        label: 'Équipements',
         feature: 'ASSET_LIST',
-        description: 'Browse assets'
+        section: 'main'
+    },
+    // Tools
+    {
+        href: '/scan',
+        icon: QrCode,
+        label: 'Scanner QR',
+        feature: 'QR_SCANNING',
+        section: 'tools'
+    },
+    {
+        href: '/assistant',
+        icon: MessageSquare,
+        label: 'Assistant IA',
+        feature: 'AI_ASSISTANT',
+        badge: 'AI',
+        section: 'tools'
     },
     {
         href: '/assets/import',
-        icon: Sparkles,
-        label: 'Import Manual',
+        icon: Upload,
+        label: 'Importer',
         feature: 'AI_IMPORT',
-        description: 'Upload PDF'
+        section: 'tools'
+    },
+    // Settings
+    {
+        href: '/settings',
+        icon: Settings,
+        label: 'Paramètres',
+        feature: null,
+        section: 'settings'
     },
 ]
 
-export function Sidebar() {
+function NavItem({ item, collapsed }: { item: NavItemConfig; collapsed: boolean }) {
     const pathname = usePathname()
+    const Icon = item.icon
+    const isActive = pathname === item.href ||
+        (item.href !== '/dashboard' && pathname.startsWith(item.href))
+
+    const content = (
+        <Link
+            href={item.href}
+            className={cn(
+                "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 relative",
+                isActive
+                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/20"
+                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
+            )}
+        >
+            <div className={cn(
+                "flex-shrink-0 flex items-center justify-center transition-transform group-hover:scale-110",
+                collapsed ? "w-6 h-6" : "w-5 h-5"
+            )}>
+                <Icon className="w-full h-full" />
+            </div>
+
+            {!collapsed && (
+                <>
+                    <span className="flex-1 font-medium text-sm truncate">
+                        {item.label}
+                    </span>
+                    {item.badge && (
+                        <Badge
+                            className={cn(
+                                "text-[10px] px-1.5 py-0 h-5 font-semibold border-0",
+                                isActive
+                                    ? "bg-white/20 text-white"
+                                    : "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                            )}
+                        >
+                            {item.badge}
+                        </Badge>
+                    )}
+                </>
+            )}
+
+            {/* Active indicator dot for collapsed mode */}
+            {collapsed && isActive && (
+                <div className="absolute -right-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-500" />
+            )}
+        </Link>
+    )
+
+    if (collapsed) {
+        return (
+            <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                    {content}
+                </TooltipTrigger>
+                <TooltipContent side="right" className="flex items-center gap-2">
+                    {item.label}
+                    {item.badge && (
+                        <Badge className="text-[10px] px-1.5 py-0 h-5 font-semibold bg-gradient-to-r from-blue-500 to-purple-600 text-white border-0">
+                            {item.badge}
+                        </Badge>
+                    )}
+                </TooltipContent>
+            </Tooltip>
+        )
+    }
+
+    return content
+}
+
+function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
+    if (collapsed) return null
+    return (
+        <div className="px-3 py-2 mt-4 first:mt-0">
+            <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                {label}
+            </span>
+        </div>
+    )
+}
+
+export function Sidebar() {
+    const [collapsed, setCollapsed] = useState(false)
+    const [user, setUser] = useState<{ name: string; email: string; initials: string } | null>(null)
+    const [loading, setLoading] = useState(true)
+    const router = useRouter()
+    const supabase = createClient()
+
+    // Fetch user on mount
+    useEffect(() => {
+        async function fetchUser() {
+            try {
+                const { data: { user: authUser } } = await supabase.auth.getUser()
+                if (authUser) {
+                    const metadata = authUser.user_metadata || {}
+                    const name = metadata.full_name || metadata.name || authUser.email?.split('@')[0] || 'User'
+                    const email = authUser.email || ''
+                    const initials = name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'U'
+                    setUser({ name, email, initials })
+                }
+            } catch (error) {
+                console.error('Error fetching user:', error)
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchUser()
+    }, [supabase])
 
     const handleLogout = async () => {
-        window.location.href = '/login'
+        await supabase.auth.signOut()
+        router.push('/login')
     }
 
     // Filter navigation items based on feature flags
@@ -86,171 +226,129 @@ export function Sidebar() {
         item.feature === null || isFeatureEnabled(item.feature)
     )
 
+    const mainItems = enabledItems.filter(i => i.section === 'main')
+    const toolItems = enabledItems.filter(i => i.section === 'tools')
+    const settingsItems = enabledItems.filter(i => i.section === 'settings')
+
     return (
-        <aside className="w-[260px] h-screen bg-gradient-to-b from-gray-50 to-white border-r border-gray-200 flex flex-col">
-            {/* ===== LOGO ===== */}
-            <div className="p-6 border-b border-gray-200">
-                <Link href="/dashboard" className="flex items-center gap-3 group">
-                    {/* Logo Icon */}
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 via-purple-600 to-blue-500 bg-[length:200%_auto] flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-110">
-                        <Zap className="h-6 w-6 text-white" />
-                    </div>
-
-                    {/* Brand Text */}
-                    <div>
-                        <h1 className="text-xl font-bold tracking-tight">OpenGMAO</h1>
-                        <p className="text-xs text-gray-500">AI Maintenance</p>
-                    </div>
-                </Link>
-            </div>
-
-            {/* ===== NAVIGATION ===== */}
-            <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto no-scrollbar">
-                {enabledItems.map((item) => {
-                    const Icon = item.icon
-                    const isActive = pathname === item.href ||
-                        (item.href !== '/dashboard' && pathname.startsWith(item.href))
-
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={cn(
-                                "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 relative",
-                                isActive
-                                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/25"
-                                    : item.highlight
-                                        ? "bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 hover:from-blue-100 hover:to-purple-100"
-                                        : "text-gray-700 hover:bg-gray-100"
-                            )}
-                        >
-                            {/* Icon Container */}
-                            <div className={cn(
-                                "flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors",
-                                isActive
-                                    ? "bg-white/20"
-                                    : item.highlight
-                                        ? "bg-white shadow-sm"
-                                        : "bg-transparent group-hover:bg-gray-200"
-                            )}>
-                                <Icon className={cn(
-                                    "h-5 w-5 transition-transform group-hover:scale-110",
-                                    isActive
-                                        ? "text-white"
-                                        : item.highlight
-                                            ? "text-blue-600"
-                                            : "text-gray-600"
-                                )} />
+        <SidebarContext.Provider value={{ collapsed, setCollapsed }}>
+            <TooltipProvider>
+                <aside className={cn(
+                    "h-screen bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col transition-all duration-300 ease-in-out",
+                    collapsed ? "w-[72px]" : "w-[240px]"
+                )}>
+                    {/* Logo */}
+                    <div className={cn(
+                        "h-16 border-b border-gray-200 dark:border-gray-800 flex items-center px-4",
+                        collapsed ? "justify-center" : "justify-between"
+                    )}>
+                        <Link href="/dashboard" className="flex items-center gap-3 group">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all group-hover:scale-105">
+                                <Sparkles className="h-5 w-5 text-white" />
                             </div>
-
-                            {/* Text Content */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-sm truncate">
-                                        {item.label}
-                                    </span>
-
-                                    {item.badge && (
-                                        <Badge
-                                            className={cn(
-                                                "text-[10px] px-1.5 py-0 h-5 font-bold border-0",
-                                                item.badgeVariant === 'success'
-                                                    ? "bg-green-500 hover:bg-green-600 text-white"
-                                                    : "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-                                            )}
-                                        >
-                                            {item.badge}
-                                        </Badge>
-                                    )}
-                                </div>
-
-                                {item.description && (
-                                    <p className={cn(
-                                        "text-xs truncate",
-                                        isActive ? "text-white/80" : "text-gray-500"
-                                    )}>
-                                        {item.description}
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Active Indicator */}
-                            {isActive && (
-                                <ChevronRight className="h-4 w-4 text-white flex-shrink-0" />
+                            {!collapsed && (
+                                <span className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-50">OpenGMAO</span>
                             )}
                         </Link>
-                    )
-                })}
-            </nav>
 
-            {/* ===== COMING SOON CARD ===== */}
-            <div className="p-4">
-                <div className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 shadow-xl">
-                    {/* Shimmer Effect */}
-                    <div className="absolute inset-0 animate-shimmer" />
-
-                    {/* Grid Pattern */}
-                    <div className="absolute inset-0 bg-grid opacity-10" />
-
-                    {/* Content */}
-                    <div className="relative space-y-3">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                                <TrendingUp className="h-4 w-4 text-white" />
-                            </div>
-                            <p className="text-sm font-bold text-white">Coming Soon</p>
-                        </div>
-
-                        <p className="text-xs text-white/90 leading-relaxed">
-                            Work Orders, Inventory, Preventive Maintenance
-                        </p>
-
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs text-white/80">
-                                <span>Development</span>
-                                <span>30%</span>
-                            </div>
-                            <Progress value={30} className="h-1.5 bg-white/20" />
-                        </div>
+                        {!collapsed && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                onClick={() => setCollapsed(true)}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                        )}
                     </div>
-                </div>
-            </div>
 
-            {/* ===== FOOTER ===== */}
-            <div className="border-t border-gray-200 p-3 space-y-2">
-                {/* User Profile */}
-                <div className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer group">
-                    <Avatar className="h-9 w-9 border-2 border-blue-200 group-hover:border-blue-300 transition-colors">
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
-                            EY
-                        </AvatarFallback>
-                    </Avatar>
+                    {/* Navigation */}
+                    <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+                        {/* Main Section */}
+                        <SectionLabel label="Principal" collapsed={collapsed} />
+                        {mainItems.map(item => (
+                            <NavItem key={item.href} item={item} collapsed={collapsed} />
+                        ))}
 
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">Engineer Youssef</p>
-                        <p className="text-xs text-gray-500 truncate">OFPPT</p>
+                        {/* Tools Section */}
+                        <SectionLabel label="Outils" collapsed={collapsed} />
+                        {toolItems.map(item => (
+                            <NavItem key={item.href} item={item} collapsed={collapsed} />
+                        ))}
+
+                        {/* Settings Section */}
+                        <SectionLabel label="Configuration" collapsed={collapsed} />
+                        {settingsItems.map(item => (
+                            <NavItem key={item.href} item={item} collapsed={collapsed} />
+                        ))}
+                    </nav>
+
+                    {/* Expand button (collapsed mode) */}
+                    {collapsed && (
+                        <div className="px-3 py-2">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="w-full h-10 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                onClick={() => setCollapsed(false)}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* User section */}
+                    <div className="border-t border-gray-200 dark:border-gray-800 p-3">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button className={cn(
+                                    "w-full flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
+                                    collapsed && "justify-center"
+                                )}>
+                                    <Avatar className="h-9 w-9 border-2 border-gray-200 dark:border-gray-700">
+                                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">
+                                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : user?.initials || 'U'}
+                                        </AvatarFallback>
+                                    </Avatar>
+
+                                    {!collapsed && (
+                                        <div className="flex-1 text-left min-w-0">
+                                            <p className="text-sm font-semibold truncate text-gray-900 dark:text-gray-50">
+                                                {loading ? '...' : user?.name || 'User'}
+                                            </p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                {loading ? '' : user?.email?.split('@')[0] || ''}
+                                            </p>
+                                        </div>
+                                    )}
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align={collapsed ? "center" : "start"} className="w-56 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 shadow-lg">
+                                <div className="px-2 py-1.5">
+                                    <p className="text-sm font-semibold">{user?.name || 'User'}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email || ''}</p>
+                                </div>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                    <Link href="/settings" className="cursor-pointer">
+                                        <User className="mr-2 h-4 w-4" />
+                                        Profil
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    className="text-red-600 focus:text-red-600 cursor-pointer"
+                                    onClick={handleLogout}
+                                >
+                                    <LogOut className="mr-2 h-4 w-4" />
+                                    Déconnexion
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
-                </div>
-
-                {/* Settings & Logout */}
-                <div className="grid grid-cols-2 gap-2">
-                    <Link
-                        href="/settings"
-                        className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-700 transition-colors text-sm font-medium"
-                    >
-                        <Settings className="h-4 w-4" />
-                        <span>Settings</span>
-                    </Link>
-
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 text-red-600 transition-colors text-sm font-medium"
-                    >
-                        <LogOut className="h-4 w-4" />
-                        <span>Logout</span>
-                    </button>
-                </div>
-            </div>
-        </aside>
+                </aside>
+            </TooltipProvider>
+        </SidebarContext.Provider>
     )
 }

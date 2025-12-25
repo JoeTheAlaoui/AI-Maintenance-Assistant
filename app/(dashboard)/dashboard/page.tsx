@@ -1,303 +1,284 @@
 import {
     QrCode,
     MessageSquare,
-    Sparkles,
+    Upload,
     Package,
     ArrowRight,
-    Zap,
-    Brain,
+    Sparkles,
     Scan,
-    BookOpen,
+    BarChart3,
     Clock,
-    Shield
-} from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
+    Factory,
+    GitBranch,
+    Layers
+} from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import Link from 'next/link'
+import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 
-export default function DashboardPage() {
+// Time-based greeting
+function getGreeting(): string {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Bonjour'
+    if (hour < 18) return 'Bon après-midi'
+    return 'Bonsoir'
+}
+
+export default async function DashboardPage() {
+    const cookieStore = await cookies()
+    const supabase = createClient(cookieStore)
+
+    // Fetch recent assets (equipment only for display)
+    const { data: recentAssets } = await supabase
+        .from('assets')
+        .select('id, name, manufacturer, status, created_at, level')
+        .or('level.is.null,level.eq.equipment')
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+    // Fetch hierarchical stats
+    const { count: totalSites } = await supabase
+        .from('assets')
+        .select('*', { count: 'exact', head: true })
+        .eq('level', 'site')
+
+    const { count: totalLines } = await supabase
+        .from('assets')
+        .select('*', { count: 'exact', head: true })
+        .eq('level', 'line')
+
+    const { count: totalEquipment } = await supabase
+        .from('assets')
+        .select('*', { count: 'exact', head: true })
+        .or('level.is.null,level.eq.equipment')
+
+    const { count: totalDocuments } = await supabase
+        .from('asset_documents')
+        .select('*', { count: 'exact', head: true })
+
+    // Get user for greeting
+    const { data: { user } } = await supabase.auth.getUser()
+    const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || ''
+
+    const greeting = getGreeting()
+
     return (
-        <div className="min-h-screen -mt-8 -mx-4 sm:-mx-6 lg:-mx-8">
-            {/* ===== HERO SECTION ===== */}
-            <section className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 border-b">
-                {/* Background Grid */}
-                <div className="absolute inset-0 bg-grid opacity-30" />
+        <div className="space-y-8">
+            {/* Hero Section */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 via-purple-500 to-violet-600 p-8 text-white">
+                <div className="absolute inset-0 bg-grid-white/10" />
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
 
-                {/* Floating Orbs */}
-                <div className="absolute top-20 left-1/4 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl animate-float" />
-                <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-float-delayed" />
-
-                <div className="relative max-w-6xl mx-auto px-6 py-16 lg:py-24">
-                    {/* Badge */}
-                    <div className="flex justify-center mb-8">
-                        <div className="feature-badge">
-                            <Zap className="h-4 w-4" />
-                            <span>AI-Powered Maintenance Assistant</span>
-                            <Badge className="bg-green-500 hover:bg-green-600 text-white border-0 shadow-lg text-[10px]">
-                                v1.0
-                            </Badge>
-                        </div>
-                    </div>
-
-                    {/* Heading */}
-                    <div className="text-center space-y-6 mb-12">
-                        <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-tight">
-                            <span className="gradient-text-animated block">
-                                Maintenance Made
-                            </span>
-                            <span className="text-gray-900">Intelligent</span>
-                        </h1>
-
-                        <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto text-balance leading-relaxed">
-                            Scan equipment, ask questions, get instant AI-powered guidance.
-                            No manual searching. Just solutions.
-                        </p>
-                    </div>
-
-                    {/* CTA Buttons */}
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-                        <Button asChild size="lg" className="btn-gradient text-lg px-8 py-6 rounded-xl w-full sm:w-auto">
-                            <Link href="/scan">
-                                <QrCode className="mr-2 h-5 w-5" />
-                                Scan Equipment Now
-                                <ArrowRight className="ml-2 h-5 w-5" />
-                            </Link>
-                        </Button>
-
-                        <Button asChild size="lg" variant="outline" className="text-lg px-8 py-6 rounded-xl border-2 hover:bg-white w-full sm:w-auto">
-                            <Link href="/assistant">
-                                <MessageSquare className="mr-2 h-5 w-5" />
-                                Open AI Assistant
-                            </Link>
-                        </Button>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="grid grid-cols-3 gap-6 max-w-xl mx-auto">
-                        {[
-                            { value: '100%', label: 'AI Accurate', icon: Brain },
-                            { value: '<30s', label: 'Avg Response', icon: Clock },
-                            { value: '24/7', label: 'Available', icon: Shield },
-                        ].map((stat) => (
-                            <div key={stat.label} className="text-center">
-                                <stat.icon className="h-6 w-6 mx-auto mb-2 text-blue-600" />
-                                <div className="text-2xl md:text-3xl font-bold gradient-text">{stat.value}</div>
-                                <div className="text-xs text-gray-600 font-medium">{stat.label}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* ===== FEATURES SECTION ===== */}
-            <section className="max-w-6xl mx-auto px-6 py-16">
-                <div className="text-center mb-12">
-                    <Badge className="mb-4 text-sm px-4 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200">
-                        Features
+                <div className="relative">
+                    <Badge className="bg-white/20 text-white border-0 mb-4">
+                        <Sparkles className="w-3 h-3 mr-1" />
+                        AI-Powered CMMS
                     </Badge>
-                    <h2 className="text-3xl md:text-4xl font-bold mb-4">Everything You Need</h2>
-                    <p className="text-gray-600 max-w-2xl mx-auto">
-                        Powerful AI-driven tools designed for maintenance technicians
+                    <h1 className="text-3xl md:text-4xl font-bold mb-2">
+                        {greeting}{userName ? `, ${userName}` : ''} ! 👋
+                    </h1>
+                    <p className="text-white/80 text-lg max-w-lg">
+                        Gérez vos équipements et obtenez des réponses instantanées grâce à l'IA.
                     </p>
                 </div>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* QR Scanner */}
-                    <Card className="card-hover border-2 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-400/20 to-emerald-400/20 rounded-bl-[100px] -z-10 group-hover:scale-150 transition-transform duration-500" />
-
-                        <CardHeader>
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-4 shadow-lg">
-                                <Scan className="h-7 w-7 text-white" />
-                            </div>
-                            <CardTitle className="text-xl">QR Code Scanner</CardTitle>
-                            <CardDescription>Instant equipment identification</CardDescription>
-                        </CardHeader>
-
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-gray-600">
-                                Point your camera at any equipment QR code to instantly access full documentation and AI assistance.
-                            </p>
-
-                            <ul className="space-y-1.5">
-                                {['No manual lookup', 'Works offline', 'Auto-loads context'].map((item) => (
-                                    <li key={item} className="flex items-center gap-2 text-sm">
-                                        <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-green-600" />
-                                        </div>
-                                        <span>{item}</span>
-                                    </li>
-                                ))}
-                            </ul>
-
-                            <Button asChild className="w-full btn-gradient-green rounded-xl">
-                                <Link href="/scan">
-                                    Open Scanner
-                                    <ArrowRight className="ml-2 h-4 w-4" />
-                                </Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
-
-                    {/* AI Assistant */}
-                    <Card className="card-hover border-2 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-bl-[100px] -z-10 group-hover:scale-150 transition-transform duration-500" />
-
-                        <CardHeader>
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg">
-                                <Brain className="h-7 w-7 text-white" />
-                            </div>
-                            <CardTitle className="text-xl flex items-center gap-2">
-                                AI Assistant
-                                <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white border-0">AI</Badge>
-                            </CardTitle>
-                            <CardDescription>Expert maintenance guidance</CardDescription>
-                        </CardHeader>
-
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-gray-600">
-                                Chat with an AI expert that knows your equipment. Get step-by-step troubleshooting and procedures.
-                            </p>
-
-                            <ul className="space-y-1.5">
-                                {['Natural language', 'Equipment-specific', 'Available 24/7'].map((item) => (
-                                    <li key={item} className="flex items-center gap-2 text-sm">
-                                        <div className="w-4 h-4 rounded-full bg-blue-100 flex items-center justify-center">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                                        </div>
-                                        <span>{item}</span>
-                                    </li>
-                                ))}
-                            </ul>
-
-                            <Button asChild className="w-full btn-gradient rounded-xl">
-                                <Link href="/assistant">
-                                    Open Assistant
-                                    <ArrowRight className="ml-2 h-4 w-4" />
-                                </Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
-
-                    {/* AI Import */}
-                    <Card className="card-hover border-2 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-bl-[100px] -z-10 group-hover:scale-150 transition-transform duration-500" />
-
-                        <CardHeader>
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mb-4 shadow-lg">
-                                <Sparkles className="h-7 w-7 text-white" />
-                            </div>
-                            <CardTitle className="text-xl">AI Manual Import</CardTitle>
-                            <CardDescription>Automatic data extraction</CardDescription>
-                        </CardHeader>
-
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-gray-600">
-                                Upload equipment manuals (PDF) and let AI extract diagnostics, components, and maintenance schedules.
-                            </p>
-
-                            <Button asChild variant="outline" className="w-full rounded-xl">
-                                <Link href="/assets/import">
-                                    Import Manual
-                                    <ArrowRight className="ml-2 h-4 w-4" />
-                                </Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
-
-                    {/* Equipment Database */}
-                    <Card className="card-hover border-2 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-orange-400/20 to-red-400/20 rounded-bl-[100px] -z-10 group-hover:scale-150 transition-transform duration-500" />
-
-                        <CardHeader>
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center mb-4 shadow-lg">
-                                <BookOpen className="h-7 w-7 text-white" />
-                            </div>
-                            <CardTitle className="text-xl">Equipment Database</CardTitle>
-                            <CardDescription>Centralized documentation</CardDescription>
-                        </CardHeader>
-
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-gray-600">
-                                Access complete equipment database with diagnostics codes, component lists, and specifications.
-                            </p>
-
-                            <Button asChild variant="outline" className="w-full rounded-xl">
-                                <Link href="/assets">
-                                    Browse Equipment
-                                    <ArrowRight className="ml-2 h-4 w-4" />
-                                </Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
-            </section>
-
-            {/* ===== HOW IT WORKS ===== */}
-            <section className="bg-gray-50 border-y">
-                <div className="max-w-6xl mx-auto px-6 py-16">
-                    <div className="text-center mb-12">
-                        <Badge className="mb-4 text-sm px-4 py-1.5 bg-purple-100 text-purple-700 hover:bg-purple-200">
-                            Simple Process
-                        </Badge>
-                        <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
-                        <p className="text-gray-600">Get maintenance help in 3 simple steps</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-                        {/* Connecting Line */}
-                        <div className="hidden md:block absolute top-16 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-blue-200 via-purple-200 to-pink-200" />
-
-                        {[
-                            { num: '1', title: 'Scan QR Code', desc: 'Point camera at equipment', gradient: 'from-blue-500 to-cyan-500', icon: QrCode },
-                            { num: '2', title: 'Ask AI', desc: 'Describe the problem', gradient: 'from-purple-500 to-pink-500', icon: MessageSquare },
-                            { num: '3', title: 'Get Solutions', desc: 'Receive instant guidance', gradient: 'from-orange-500 to-red-500', icon: Zap }
-                        ].map((step) => (
-                            <div key={step.num} className="text-center relative">
-                                <div className={`w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center text-2xl font-bold text-white shadow-xl bg-gradient-to-br ${step.gradient} relative z-10`}>
-                                    {step.num}
+            {/* Quick Actions */}
+            <div>
+                <h2 className="text-lg font-semibold mb-4">Actions rapides</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Scan QR */}
+                    <Link href="/scan">
+                        <Card className="group cursor-pointer border-2 hover:border-green-300 hover:shadow-lg transition-all duration-200">
+                            <CardContent className="p-6">
+                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                    <QrCode className="h-6 w-6 text-white" />
                                 </div>
-                                <step.icon className="h-8 w-8 mx-auto mb-3 text-gray-400" />
-                                <h3 className="text-lg font-bold mb-1">{step.title}</h3>
-                                <p className="text-sm text-gray-600">{step.desc}</p>
-                            </div>
-                        ))}
-                    </div>
+                                <h3 className="font-semibold text-lg mb-1">Scanner QR</h3>
+                                <p className="text-sm text-gray-500">Identifier un équipement instantanément</p>
+                            </CardContent>
+                        </Card>
+                    </Link>
+
+                    {/* Ask AI */}
+                    <Link href="/assistant">
+                        <Card className="group cursor-pointer border-2 hover:border-blue-300 hover:shadow-lg transition-all duration-200">
+                            <CardContent className="p-6">
+                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                    <MessageSquare className="h-6 w-6 text-white" />
+                                </div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-semibold text-lg">Assistant IA</h3>
+                                    <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white border-0 text-xs">AI</Badge>
+                                </div>
+                                <p className="text-sm text-gray-500">Posez vos questions techniques</p>
+                            </CardContent>
+                        </Card>
+                    </Link>
+
+                    {/* Import Manual */}
+                    <Link href="/assets/import">
+                        <Card className="group cursor-pointer border-2 hover:border-purple-300 hover:shadow-lg transition-all duration-200">
+                            <CardContent className="p-6">
+                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                    <Upload className="h-6 w-6 text-white" />
+                                </div>
+                                <h3 className="font-semibold text-lg mb-1">Importer Manuel</h3>
+                                <p className="text-sm text-gray-500">Uploadez un PDF pour activer l'IA</p>
+                            </CardContent>
+                        </Card>
+                    </Link>
                 </div>
-            </section>
+            </div>
 
-            {/* ===== CTA SECTION ===== */}
-            <section className="max-w-4xl mx-auto px-6 py-16">
-                <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-purple-50 shadow-xl overflow-hidden">
-                    <CardContent className="p-8 md:p-12 text-center relative">
-                        <div className="absolute inset-0 bg-grid opacity-20" />
-
-                        <div className="relative">
-                            <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Get Started?</h2>
-                            <p className="text-gray-600 mb-8 max-w-xl mx-auto">
-                                Experience the future of maintenance. No setup required. Just scan and ask.
-                            </p>
-
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                                <Button asChild size="lg" className="btn-gradient text-lg px-8 py-6 rounded-xl w-full sm:w-auto">
-                                    <Link href="/scan">
-                                        <QrCode className="mr-2 h-5 w-5" />
-                                        Start Scanning
-                                    </Link>
-                                </Button>
-
-                                <Button asChild size="lg" variant="outline" className="text-lg px-8 py-6 rounded-xl border-2 w-full sm:w-auto">
-                                    <Link href="/assets/import">
-                                        <Sparkles className="mr-2 h-5 w-5" />
-                                        Import First Manual
-                                    </Link>
-                                </Button>
+            {/* Hierarchy Stats Row */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                {/* Sites */}
+                <Card className="bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/20 dark:to-gray-900 border-purple-200 dark:border-purple-800">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                <Factory className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{totalSites || 0}</p>
+                                <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Sites</p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
-            </section>
+
+                {/* Lines */}
+                <Card className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-gray-900 border-blue-200 dark:border-blue-800">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+                                <GitBranch className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{totalLines || 0}</p>
+                                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Lignes</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Equipment */}
+                <Card className="bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-gray-900 border-green-200 dark:border-green-800">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg">
+                                <Package className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-green-700 dark:text-green-300">{totalEquipment || 0}</p>
+                                <p className="text-xs text-green-600 dark:text-green-400 font-medium">Équipements</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Documents */}
+                <Card className="bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/20 dark:to-gray-900 border-orange-200 dark:border-orange-800">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-lg">
+                                <Scan className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">{totalDocuments || 0}</p>
+                                <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Manuels</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Conversations */}
+                <Card className="bg-gradient-to-br from-pink-50 to-white dark:from-pink-900/20 dark:to-gray-900 border-pink-200 dark:border-pink-800">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center shadow-lg">
+                                <MessageSquare className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-pink-700 dark:text-pink-300">0</p>
+                                <p className="text-xs text-pink-600 dark:text-pink-400 font-medium">Conversations</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Recent Assets */}
+            <div>
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold">Équipements récents</h2>
+                    <Link href="/assets">
+                        <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-900">
+                            Voir tout
+                            <ArrowRight className="ml-1 h-4 w-4" />
+                        </Button>
+                    </Link>
+                </div>
+
+                {recentAssets && recentAssets.length > 0 ? (
+                    <div className="space-y-2">
+                        {recentAssets.map((asset) => (
+                            <Link key={asset.id} href={`/assets/${asset.id}`}>
+                                <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                                    <CardContent className="p-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                                                <Package className="h-5 w-5 text-gray-500" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">{asset.name}</p>
+                                                <p className="text-sm text-gray-500">{asset.manufacturer || 'Fabricant inconnu'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <Badge
+                                                variant="secondary"
+                                                className={
+                                                    asset.status === 'operational' || asset.status === 'active'
+                                                        ? 'bg-green-100 text-green-700 hover:bg-green-100'
+                                                        : asset.status === 'maintenance'
+                                                            ? 'bg-amber-100 text-amber-700 hover:bg-amber-100'
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-100'
+                                                }
+                                            >
+                                                {asset.status || 'Actif'}
+                                            </Badge>
+                                            <ArrowRight className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </Link>
+                        ))}
+                    </div>
+                ) : (
+                    <Card className="border-dashed">
+                        <CardContent className="p-8 text-center">
+                            <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                                <Package className="h-8 w-8 text-gray-400" />
+                            </div>
+                            <h3 className="font-semibold mb-1">Aucun équipement</h3>
+                            <p className="text-sm text-gray-500 mb-4">
+                                Importez votre premier manuel PDF pour commencer
+                            </p>
+                            <Link href="/assets/import">
+                                <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Importer un manuel
+                                </Button>
+                            </Link>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
         </div>
-    );
+    )
 }
