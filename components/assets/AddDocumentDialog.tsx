@@ -11,14 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { Upload, FileText, Loader2 } from 'lucide-react';
+import { Upload, FileText, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AddDocumentDialogProps {
@@ -49,7 +42,6 @@ export default function AddDocumentDialog({
     onSuccess,
 }: AddDocumentDialogProps) {
     const [file, setFile] = useState<File | null>(null);
-    const [documentType, setDocumentType] = useState<string>('manual');
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [currentStage, setCurrentStage] = useState('');
@@ -58,6 +50,7 @@ export default function AddDocumentDialog({
     const [showTypeConfirmation, setShowTypeConfirmation] = useState(false);
     const [detectedTypes, setDetectedTypes] = useState<string[]>([]);
     const [documentId, setDocumentId] = useState<string>('');
+    const [confirmingTypes, setConfirmingTypes] = useState(false); // 🆕 Loading state for confirm button
 
     async function handleUpload() {
         if (!file) {
@@ -73,7 +66,7 @@ export default function AddDocumentDialog({
             formData.append('file', file);
             formData.append('assetId', assetId);
             formData.append('organizationId', organizationId);
-            formData.append('documentType', documentType);
+            formData.append('documentType', 'manual'); // Default type - AI will detect actual types
 
             const response = await fetch('/api/ingest', {
                 method: 'POST',
@@ -107,7 +100,7 @@ export default function AddDocumentDialog({
 
                                 // 🆕 Extract AI-detected types from response
                                 const aiTypes = data.result?.document_types || ['manual'];
-                                const docId = data.result?.asset_id || ''; // Document ID
+                                const docId = data.result?.document_id || ''; // 🔧 Fixed: document_id, not asset_id
 
                                 console.log('🏷️ AI detected types:', aiTypes);
 
@@ -138,19 +131,22 @@ export default function AddDocumentDialog({
 
     function resetForm() {
         setFile(null);
-        setDocumentType('manual');
         setProgress(0);
         setCurrentStage('');
     }
 
     async function handleConfirmTypes() {
         try {
+            setConfirmingTypes(true);
+
             // Save confirmed types to database
-            const cookieStore = await fetch('/api/documents/' + documentId, {
+            const response = await fetch('/api/documents/' + documentId, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ document_types: detectedTypes })
             });
+
+            if (!response.ok) throw new Error('Failed to save types');
 
             toast.success('Document types confirmed!');
 
@@ -162,6 +158,8 @@ export default function AddDocumentDialog({
         } catch (error) {
             console.error('Error saving types:', error);
             toast.error('Failed to save document types');
+        } finally {
+            setConfirmingTypes(false);
         }
     }
 
@@ -183,54 +181,66 @@ export default function AddDocumentDialog({
     return (
         <>
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>Add Document</DialogTitle>
+                        <DialogTitle className="flex items-center gap-2 text-xl">
+                            <div className="p-2 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg">
+                                <Upload className="h-5 w-5 text-blue-600" />
+                            </div>
+                            Add Document
+                        </DialogTitle>
                         <DialogDescription>
-                            Upload a new document for this equipment
+                            Upload a PDF and AI will automatically classify the document type for you.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4 py-4">
-                        {/* Document Type Selector */}
-                        <div className="space-y-2">
-                            <Label htmlFor="document-type">Document Type</Label>
-                            <Select value={documentType} onValueChange={setDocumentType} disabled={uploading}>
-                                <SelectTrigger id="document-type">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {DOCUMENT_TYPES.map((type) => (
-                                        <SelectItem key={type.value} value={type.value}>
-                                            {type.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                        {/* AI Detection Info Banner */}
+                        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4 flex items-start gap-3">
+                            <div className="text-2xl">🤖</div>
+                            <div>
+                                <p className="font-medium text-purple-900">AI-Powered Classification</p>
+                                <p className="text-sm text-purple-700">
+                                    Document types will be automatically detected after upload. You can review and adjust them.
+                                </p>
+                            </div>
                         </div>
 
-                        {/* File Input */}
+                        {/* File Input - Enhanced */}
                         <div className="space-y-2">
                             <Label htmlFor="file">PDF File</Label>
-                            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                            <div
+                                className={`
+                                    border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
+                                    ${file
+                                        ? 'border-blue-300 bg-blue-50'
+                                        : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/50'
+                                    }
+                                `}
+                                onClick={() => !uploading && document.getElementById('file')?.click()}
+                            >
                                 {file ? (
-                                    <div className="flex items-center justify-center gap-2">
-                                        <FileText className="h-8 w-8 text-blue-500" />
+                                    <div className="flex items-center justify-center gap-4">
+                                        <div className="p-3 bg-blue-100 rounded-lg">
+                                            <FileText className="h-8 w-8 text-blue-600" />
+                                        </div>
                                         <div className="text-left">
-                                            <p className="font-medium">{file.name}</p>
+                                            <p className="font-semibold text-gray-900">{file.name}</p>
                                             <p className="text-sm text-muted-foreground">
-                                                {(file.size / 1024 / 1024).toFixed(2)} MB
+                                                {(file.size / 1024 / 1024).toFixed(2)} MB • Ready to upload
                                             </p>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div>
-                                        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                                        <p className="text-sm text-muted-foreground mb-2">
-                                            Click to select PDF file
+                                    <div className="py-4">
+                                        <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
+                                            <Upload className="h-8 w-8 text-blue-500" />
+                                        </div>
+                                        <p className="font-medium text-gray-700 mb-1">
+                                            Drop your PDF here or click to browse
                                         </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            Max 50MB
+                                        <p className="text-sm text-muted-foreground">
+                                            Maximum file size: 50MB
                                         </p>
                                     </div>
                                 )}
@@ -242,16 +252,21 @@ export default function AddDocumentDialog({
                                     onChange={handleFileChange}
                                     disabled={uploading}
                                 />
+                            </div>
+                            {file && (
                                 <Button
-                                    variant="outline"
+                                    variant="ghost"
                                     size="sm"
-                                    className="mt-2"
-                                    onClick={() => document.getElementById('file')?.click()}
+                                    className="text-muted-foreground hover:text-red-500"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFile(null);
+                                    }}
                                     disabled={uploading}
                                 >
-                                    {file ? 'Change File' : 'Select File'}
+                                    Remove file
                                 </Button>
-                            </div>
+                            )}
                         </div>
 
                         {/* Progress Bar */}
@@ -299,43 +314,88 @@ export default function AddDocumentDialog({
                 </DialogContent>
             </Dialog>
 
-            {/* 🆕 Type Confirmation Dialog */}
+            {/* 🆕 Type Confirmation Dialog - Enhanced */}
             <Dialog open={showTypeConfirmation} onOpenChange={setShowTypeConfirmation}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>Confirm Document Types</DialogTitle>
+                        <DialogTitle className="text-xl">Confirm Document Types</DialogTitle>
                         <DialogDescription>
-                            AI detected these content types. You can modify them if needed.
+                            AI detected these content types. Review and adjust the selections to improve search accuracy.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-2 py-4">
-                        {DOCUMENT_TYPES.map((type) => (
-                            <div key={type.value} className="flex items-center space-x-2">
-                                <input
-                                    type="checkbox"
-                                    id={`type-${type.value}`}
-                                    checked={detectedTypes.includes(type.value)}
-                                    onChange={(e) => {
-                                        if (e.target.checked) {
-                                            setDetectedTypes([...detectedTypes, type.value]);
-                                        } else {
+                    <div className="grid grid-cols-2 gap-3 py-4 max-h-[60vh] overflow-y-auto">
+                        {DOCUMENT_TYPES.map((type) => {
+                            const isSelected = detectedTypes.includes(type.value);
+                            const typeColor = getDocumentTypeColor(type.value);
+
+                            return (
+                                <div
+                                    key={type.value}
+                                    onClick={() => {
+                                        if (isSelected) {
                                             setDetectedTypes(detectedTypes.filter(t => t !== type.value));
+                                        } else {
+                                            setDetectedTypes([...detectedTypes, type.value]);
                                         }
                                     }}
-                                    className="h-4 w-4 rounded border-gray-300"
-                                />
-                                <label
-                                    htmlFor={`type-${type.value}`}
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                    className={`
+                                        relative p-4 rounded-lg border-2 cursor-pointer transition-all
+                                        ${isSelected
+                                            ? `${typeColor} border-transparent text-white shadow-md`
+                                            : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                                        }
+                                    `}
                                 >
-                                    {type.label}
-                                </label>
-                            </div>
-                        ))}
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2 flex-1">
+                                            <div className={`
+                                                p-1.5 rounded-md
+                                                ${isSelected ? 'bg-white/20' : 'bg-gray-100'}
+                                            `}>
+                                                <FileText className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-gray-600'}`} />
+                                            </div>
+                                            <span className={`text-sm font-medium ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                                                {type.label}
+                                            </span>
+                                        </div>
+
+                                        <div className={`
+                                            h-5 w-5 rounded border-2 flex items-center justify-center
+                                            ${isSelected
+                                                ? 'bg-white border-white'
+                                                : 'border-gray-300 bg-white'
+                                            }
+                                        `}>
+                                            {isSelected && (
+                                                <svg className={`h-3 w-3 ${typeColor.replace('bg-', 'text-')}`} fill="currentColor" viewBox="0 0 12 12">
+                                                    <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
 
-                    <DialogFooter>
+                    {detectedTypes.length === 0 && (
+                        <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md p-3">
+                            ⚠️ Please select at least one document type
+                        </div>
+                    )}
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-3 flex items-start gap-2">
+                        <div className="text-blue-600 mt-0.5">💡</div>
+                        <div className="text-sm text-blue-700">
+                            <strong>AI Classification:</strong> Types are automatically detected based on document content. You can add or remove types as needed.
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <div className="text-sm text-muted-foreground mr-auto">
+                            {detectedTypes.length} type{detectedTypes.length !== 1 ? 's' : ''} selected
+                        </div>
                         <Button
                             variant="outline"
                             onClick={() => {
@@ -349,13 +409,30 @@ export default function AddDocumentDialog({
                         </Button>
                         <Button
                             onClick={handleConfirmTypes}
-                            disabled={detectedTypes.length === 0}
+                            disabled={confirmingTypes || detectedTypes.length === 0}
+                            className="min-w-32"
                         >
-                            Confirm Types
+                            {confirmingTypes ? 'Saving...' : 'Confirm Types'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
         </>
     );
+}
+
+// Helper function for document type colors
+function getDocumentTypeColor(type: string): string {
+    const colors: Record<string, string> = {
+        manual: 'bg-blue-500',
+        installation: 'bg-green-500',
+        maintenance: 'bg-orange-500',
+        troubleshooting: 'bg-red-500',
+        parts: 'bg-purple-500',
+        electrical: 'bg-yellow-500',
+        mechanical: 'bg-cyan-500',
+        safety: 'bg-pink-500',
+        other: 'bg-gray-500',
+    };
+    return colors[type] || 'bg-gray-500';
 }

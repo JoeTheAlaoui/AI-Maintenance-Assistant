@@ -11,10 +11,24 @@ import {
     Calendar,
     Database,
     RefreshCw,
+    Edit2, // 🆕 For edit types button
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import AddDocumentDialog from './AddDocumentDialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'; // 🆕 For edit dialog
+
+// Document types definition (matching AddDocumentDialog)
+const DOCUMENT_TYPES = [
+    { value: 'manual', label: 'General Manual' },
+    { value: 'installation', label: 'Installation Guide' },
+    { value: 'maintenance', label: 'Maintenance Manual' },
+    { value: 'troubleshooting', label: 'Troubleshooting' },
+    { value: 'parts', label: 'Parts Catalog' },
+    { value: 'electrical', label: 'Electrical Schematics' },
+    { value: 'mechanical', label: 'Mechanical Drawings' },
+    { value: 'safety', label: 'Safety Procedures' },
+];
 
 interface Document {
     id: string;
@@ -37,6 +51,11 @@ export default function DocumentsTab({ assetId, organizationId }: DocumentsTabPr
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState<string | null>(null);
     const [showAddDialog, setShowAddDialog] = useState(false);
+
+    // 🆕 Edit types state
+    const [editingDoc, setEditingDoc] = useState<Document | null>(null);
+    const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+    const [savingTypes, setSavingTypes] = useState(false);
 
     // Fetch documents on mount
     useEffect(() => {
@@ -88,6 +107,54 @@ export default function DocumentsTab({ assetId, organizationId }: DocumentsTabPr
             setDeleting(null);
         }
     }
+
+    // 🆕 Handle edit types
+    function handleEditTypes(doc: Document) {
+        setEditingDoc(doc);
+        setSelectedTypes(doc.document_types || [doc.document_type]);
+    }
+
+    // 🆕 Save edited types
+    async function handleSaveTypes() {
+        if (!editingDoc || selectedTypes.length === 0) {
+            toast.error('Please select at least one type');
+            return;
+        }
+
+        try {
+            setSavingTypes(true);
+            const response = await fetch(`/api/documents/${editingDoc.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ document_types: selectedTypes })
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to update types');
+            }
+
+            toast.success('Document types updated successfully!');
+
+            // Update local state
+            setDocuments(docs => docs.map(d =>
+                d.id === editingDoc.id
+                    ? { ...d, document_types: selectedTypes }
+                    : d
+            ));
+
+            // Close dialog
+            setEditingDoc(null);
+            setSelectedTypes([]);
+
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to update types');
+            console.error(error);
+        } finally {
+            setSavingTypes(false);
+        }
+    }
+
 
     function getDocumentTypeLabel(type: string): string {
         const labels: Record<string, string> = {
@@ -231,6 +298,16 @@ export default function DocumentsTab({ assetId, organizationId }: DocumentsTabPr
 
                                     {/* Right: Actions */}
                                     <div className="flex items-center gap-2">
+                                        {/* 🆕 Edit Types Button */}
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleEditTypes(doc)}
+                                            title="Edit document types"
+                                        >
+                                            <Edit2 className="h-4 w-4" />
+                                        </Button>
+
                                         <Button
                                             variant="ghost"
                                             size="sm"
@@ -269,6 +346,99 @@ export default function DocumentsTab({ assetId, organizationId }: DocumentsTabPr
                     fetchDocuments();
                 }}
             />
+
+            {/* 🆕 Edit Types Dialog - Enhanced */}
+            <Dialog open={!!editingDoc} onOpenChange={() => setEditingDoc(null)}>
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl">Edit Document Types</DialogTitle>
+                        <DialogDescription>
+                            Select all content types that describe this document. Multiple selections help improve search accuracy.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-2 gap-3 py-4 max-h-[60vh] overflow-y-auto">
+                        {DOCUMENT_TYPES.map((type) => {
+                            const isSelected = selectedTypes.includes(type.value);
+                            return (
+                                <div
+                                    key={type.value}
+                                    onClick={() => {
+                                        if (isSelected) {
+                                            setSelectedTypes(selectedTypes.filter(t => t !== type.value));
+                                        } else {
+                                            setSelectedTypes([...selectedTypes, type.value]);
+                                        }
+                                    }}
+                                    className={`
+                                        relative p-4 rounded-lg border-2 cursor-pointer transition-all
+                                        ${isSelected
+                                            ? `${getDocumentTypeColor(type.value)} border-transparent text-white shadow-md`
+                                            : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                                        }
+                                    `}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2 flex-1">
+                                            <div className={`
+                                                p-1.5 rounded-md
+                                                ${isSelected ? 'bg-white/20' : 'bg-gray-100'}
+                                            `}>
+                                                <FileText className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-gray-600'}`} />
+                                            </div>
+                                            <span className={`text-sm font-medium ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                                                {type.label}
+                                            </span>
+                                        </div>
+
+                                        <div className={`
+                                            h-5 w-5 rounded border-2 flex items-center justify-center
+                                            ${isSelected
+                                                ? 'bg-white border-white'
+                                                : 'border-gray-300 bg-white'
+                                            }
+                                        `}>
+                                            {isSelected && (
+                                                <svg className={`h-3 w-3 ${getDocumentTypeColor(type.value).replace('bg-', 'text-')}`} fill="currentColor" viewBox="0 0 12 12">
+                                                    <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {selectedTypes.length === 0 && (
+                        <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md p-3">
+                            ⚠️ Please select at least one document type
+                        </div>
+                    )}
+
+                    <DialogFooter className="gap-2">
+                        <div className="text-sm text-muted-foreground mr-auto">
+                            {selectedTypes.length} type{selectedTypes.length !== 1 ? 's' : ''} selected
+                        </div>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setEditingDoc(null);
+                                setSelectedTypes([]);
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleSaveTypes}
+                            disabled={savingTypes || selectedTypes.length === 0}
+                            className="min-w-32"
+                        >
+                            {savingTypes ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

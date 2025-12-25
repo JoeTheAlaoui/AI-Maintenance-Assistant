@@ -939,6 +939,7 @@ ${'-'.repeat(50)}
                     result: {
                         success: true,
                         asset_id: assetId,
+                        document_id: documentId, // 🆕 Required for type confirmation
                         asset: {
                             name: metadata.name,
                             manufacturer: metadata.manufacturer,
