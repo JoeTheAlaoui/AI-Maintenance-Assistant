@@ -11,12 +11,19 @@ import {
     Calendar,
     Database,
     RefreshCw,
-    Edit2, // 🆕 For edit types button
+    Edit2,
+    History,
+    RefreshCcw,
+    Archive,
+    CheckCircle2,
+    AlertTriangle,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import AddDocumentDialog from './AddDocumentDialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'; // 🆕 For edit dialog
+import ReplaceDocumentDialog from './ReplaceDocumentDialog';
+import DocumentVersionHistory from './DocumentVersionHistory';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // Document types definition (matching AddDocumentDialog)
 const DOCUMENT_TYPES = [
@@ -32,13 +39,21 @@ const DOCUMENT_TYPES = [
 
 interface Document {
     id: string;
+    asset_id: string;  // Required for version dialogs
     file_name: string;
-    document_type: string; // Legacy single type
-    document_types?: string[]; // 🆕 New multi-type array
+    document_type: string;
+    document_types?: string[];
     file_size: number;
     total_chunks: number;
     created_at: string;
     processing_status: string;
+    // 🆕 Version tracking fields
+    version?: string;
+    is_latest?: boolean;
+    supersedes?: string;
+    superseded_by?: string;
+    version_notes?: string;
+    archived_at?: string;
 }
 
 interface DocumentsTabProps {
@@ -52,10 +67,14 @@ export default function DocumentsTab({ assetId, organizationId }: DocumentsTabPr
     const [deleting, setDeleting] = useState<string | null>(null);
     const [showAddDialog, setShowAddDialog] = useState(false);
 
-    // 🆕 Edit types state
+    // Edit types state
     const [editingDoc, setEditingDoc] = useState<Document | null>(null);
     const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
     const [savingTypes, setSavingTypes] = useState(false);
+
+    // 🆕 Version dialogs state
+    const [replaceDoc, setReplaceDoc] = useState<Document | null>(null);
+    const [historyDocId, setHistoryDocId] = useState<string | null>(null);
 
     // Fetch documents on mount
     useEffect(() => {
@@ -256,9 +275,42 @@ export default function DocumentsTab({ assetId, organizationId }: DocumentsTabPr
                                         </div>
 
                                         <div className="flex-1 space-y-2">
-                                            {/* File Name */}
-                                            <div className="flex items-center gap-2">
+                                            {/* File Name + Version Badges */}
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <h4 className="font-medium">{doc.file_name}</h4>
+
+                                                {/* Version Badge */}
+                                                {doc.version && (
+                                                    <Badge variant="outline" className="text-xs">
+                                                        v{doc.version}
+                                                    </Badge>
+                                                )}
+
+                                                {/* Latest Badge */}
+                                                {doc.is_latest && (
+                                                    <Badge className="bg-green-100 text-green-700 text-xs">
+                                                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                                                        Latest
+                                                    </Badge>
+                                                )}
+
+                                                {/* Outdated Badge */}
+                                                {!doc.is_latest && !doc.archived_at && doc.superseded_by && (
+                                                    <Badge variant="outline" className="text-amber-600 border-amber-400 text-xs">
+                                                        <AlertTriangle className="h-3 w-3 mr-1" />
+                                                        Outdated
+                                                    </Badge>
+                                                )}
+
+                                                {/* Archived Badge */}
+                                                {doc.archived_at && (
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        <Archive className="h-3 w-3 mr-1" />
+                                                        Archived
+                                                    </Badge>
+                                                )}
+
+                                                {/* Processing Badge */}
                                                 {doc.processing_status === 'processing' && (
                                                     <Badge variant="outline" className="text-xs">
                                                         Processing...
@@ -297,10 +349,32 @@ export default function DocumentsTab({ assetId, organizationId }: DocumentsTabPr
                                     </div>
 
                                     {/* Right: Actions */}
-                                    <div className="flex items-center gap-2">
-                                        {/* 🆕 Edit Types Button */}
+                                    <div className="flex items-center gap-1">
+                                        {/* Version History Button */}
                                         <Button
-                                            variant="outline"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setHistoryDocId(doc.id)}
+                                            title="Version history"
+                                        >
+                                            <History className="h-4 w-4" />
+                                        </Button>
+
+                                        {/* Replace Document Button (only for latest) */}
+                                        {doc.is_latest && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setReplaceDoc(doc)}
+                                                title="Upload new version"
+                                            >
+                                                <RefreshCcw className="h-4 w-4" />
+                                            </Button>
+                                        )}
+
+                                        {/* Edit Types Button */}
+                                        <Button
+                                            variant="ghost"
                                             size="sm"
                                             onClick={() => handleEditTypes(doc)}
                                             title="Edit document types"
@@ -308,11 +382,13 @@ export default function DocumentsTab({ assetId, organizationId }: DocumentsTabPr
                                             <Edit2 className="h-4 w-4" />
                                         </Button>
 
+                                        {/* Delete Button */}
                                         <Button
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleDelete(doc.id, doc.file_name)}
                                             disabled={deleting === doc.id}
+                                            title="Delete document"
                                         >
                                             {deleting === doc.id ? (
                                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-destructive"></div>
@@ -439,6 +515,23 @@ export default function DocumentsTab({ assetId, organizationId }: DocumentsTabPr
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* 🆕 Replace Document Dialog */}
+            <ReplaceDocumentDialog
+                open={!!replaceDoc}
+                onOpenChange={(open) => !open && setReplaceDoc(null)}
+                document={replaceDoc}
+                organizationId={organizationId}
+                onSuccess={fetchDocuments}
+            />
+
+            {/* 🆕 Version History Dialog */}
+            <DocumentVersionHistory
+                open={!!historyDocId}
+                onOpenChange={(open) => !open && setHistoryDocId(null)}
+                documentId={historyDocId}
+                onRefresh={fetchDocuments}
+            />
         </div>
     );
 }

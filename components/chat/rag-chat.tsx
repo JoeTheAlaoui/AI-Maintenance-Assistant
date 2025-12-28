@@ -1,4 +1,5 @@
 // components/chat/rag-chat.tsx
+// Smart RAG Chat with Conversation Memory (Phase 5)
 
 'use client';
 
@@ -6,9 +7,11 @@ import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 're
 import { Send, Bot, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { useConversationMemory } from '@/hooks/useConversationMemory';
+import ConversationControls from './ConversationControls';
+import { Message as ConversationMessage } from '@/types/conversation';
 
 interface AnalysisMetadata {
     intent: string;
@@ -41,55 +44,96 @@ export interface RAGChatRef {
 }
 
 export const RAGChat = forwardRef<RAGChatRef, RAGChatProps>(({ assetId, assetName }, ref) => {
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 'welcome',
-            role: 'assistant',
-            content: `Bonjour! Je suis votre assistant technique pour **${assetName}**. Je peux répondre à vos questions sur la maintenance, le dépannage, les spécifications techniques, et plus encore. Comment puis-je vous aider?`,
-        }
-    ]);
+    // 🆕 Use conversation memory hook with session storage persistence
+    const {
+        messages: persistedMessages,
+        addMessage,
+        clearConversation,
+        getContextForAI,
+        summary,
+        isLoaded,
+    } = useConversationMemory(assetId);
+
+    // Local state for current session display (includes welcome + persisted)
+    const [displayMessages, setDisplayMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Welcome message (not persisted)
+    const welcomeMessage: Message = {
+        id: 'welcome',
+        role: 'assistant',
+        content: `Bonjour! Je suis votre assistant technique pour **${assetName}**. Je peux répondre à vos questions sur la maintenance, le dépannage, les spécifications techniques, et plus encore. Comment puis-je vous aider?`,
+    };
+
+    // Sync display messages with persisted messages
+    useEffect(() => {
+        if (isLoaded) {
+            // Convert persisted messages to display format
+            const converted: Message[] = persistedMessages.map(m => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+            }));
+            setDisplayMessages([welcomeMessage, ...converted]);
+        }
+    }, [persistedMessages, isLoaded, assetName]);
 
     // Auto-scroll to bottom
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [messages]);
+    }, [displayMessages]);
+
+    // 🆕 Handle clearing conversation
+    const handleClearConversation = () => {
+        clearConversation();
+        setDisplayMessages([welcomeMessage]);
+    };
 
     const sendMessageInternal = async (messageContent: string) => {
         if (!messageContent.trim() || isLoading) return;
 
+        // Create user message for display
         const userMessage: Message = {
-            id: Date.now().toString(),
+            id: `user_${Date.now()}`,
             role: 'user',
             content: messageContent.trim(),
         };
 
-        setMessages(prev => [...prev, userMessage]);
+        // 🆕 Persist user message to session storage
+        addMessage({
+            role: 'user',
+            content: messageContent.trim(),
+            metadata: { assetId, assetName },
+        });
+
+        // Update display
+        setDisplayMessages(prev => [...prev, userMessage]);
         setInput('');
         setIsLoading(true);
 
         // Add placeholder for assistant response
-        const assistantId = (Date.now() + 1).toString();
-        setMessages(prev => [...prev, {
+        const assistantId = `assistant_${Date.now()}`;
+        setDisplayMessages(prev => [...prev, {
             id: assistantId,
             role: 'assistant',
             content: '',
         }]);
 
         try {
+            // 🆕 Get conversation context from memory (last 5 messages)
+            const conversationContext = getContextForAI();
+
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: userMessage.content,
                     asset_id: assetId,
-                    conversation_history: messages
-                        .filter(m => m.id !== 'welcome')
-                        .map(m => ({ role: m.role, content: m.content })),
+                    conversation_history: conversationContext,
                 }),
             });
 
@@ -116,15 +160,15 @@ export const RAGChat = forwardRef<RAGChatRef, RAGChatProps>(({ assetId, assetNam
                             const data = JSON.parse(line.slice(6));
                             if (data.content) {
                                 fullContent += data.content;
-                                setMessages(prev => prev.map(m =>
+                                setDisplayMessages(prev => prev.map(m =>
                                     m.id === assistantId
                                         ? { ...m, content: fullContent }
                                         : m
                                 ));
                             }
                             if (data.done) {
-                                // Update with new metadata format
-                                setMessages(prev => prev.map(m =>
+                                // Update display with metadata
+                                setDisplayMessages(prev => prev.map(m =>
                                     m.id === assistantId
                                         ? {
                                             ...m,
@@ -134,6 +178,13 @@ export const RAGChat = forwardRef<RAGChatRef, RAGChatProps>(({ assetId, assetNam
                                         }
                                         : m
                                 ));
+
+                                // 🆕 Persist assistant response to session storage
+                                addMessage({
+                                    role: 'assistant',
+                                    content: fullContent,
+                                    metadata: { assetId, assetName },
+                                });
                             }
                         } catch (e) {
                             // Skip invalid JSON
@@ -145,7 +196,7 @@ export const RAGChat = forwardRef<RAGChatRef, RAGChatProps>(({ assetId, assetNam
             // Final message was already updated when 'done' received
         } catch (error) {
             console.error('Chat error:', error);
-            setMessages(prev => prev.map(m =>
+            setDisplayMessages(prev => prev.map(m =>
                 m.id === assistantId
                     ? { ...m, content: 'Désolé, une erreur est survenue. Veuillez réessayer.' }
                     : m
@@ -175,10 +226,13 @@ export const RAGChat = forwardRef<RAGChatRef, RAGChatProps>(({ assetId, assetNam
 
     return (
         <div className="flex flex-col h-full min-h-0 bg-white">
+            {/* 🆕 Conversation Controls */}
+            <ConversationControls summary={summary} onClear={handleClearConversation} />
+
             {/* Messages - scrollable area */}
             <div className="flex-1 overflow-y-auto p-4 min-h-0" ref={scrollRef}>
                 <div className="space-y-4">
-                    {messages.map((message) => (
+                    {displayMessages.map((message) => (
                         <div
                             key={message.id}
                             className={cn(

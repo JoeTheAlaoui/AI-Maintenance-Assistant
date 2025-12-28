@@ -26,7 +26,8 @@ import { RAGChat, RAGChatRef } from '@/components/chat/rag-chat'
 import { QRCodeGenerator } from '@/components/qr-code-generator'
 import { DependencyManager } from '@/components/assets/dependency-manager'
 import DocumentsTab from '@/components/assets/DocumentsTab'
-import AliasManager from '@/components/assets/AliasManager' // 🆕 Alias management
+import AliasManager from '@/components/assets/AliasManager'
+import DependencySuggestions from '@/components/assets/DependencySuggestions' // 🆕 Phase 9
 
 interface Asset {
     id: string
@@ -297,7 +298,10 @@ export default function AssetDetailPage() {
                         </TabsContent>
 
                         {/* Dependencies Tab */}
-                        <TabsContent value="dependencies" className="mt-4">
+                        <TabsContent value="dependencies" className="mt-4 space-y-4">
+                            {/* 🆕 AI-Detected Dependency Suggestions */}
+                            <DependencySuggestions assetId={asset.id} assetName={asset.name} />
+
                             <Card>
                                 <CardContent className="p-6">
                                     <DependencyManager assetId={asset.id} assetName={asset.name} />

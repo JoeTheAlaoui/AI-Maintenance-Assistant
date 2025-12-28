@@ -20,18 +20,48 @@ export async function DELETE(
     }
 
     const { id: documentId } = await params;
+    console.log(`🗑️ Deleting document: ${documentId}`);
 
     try {
-        // Delete document (chunks will cascade delete automatically)
-        const { error } = await supabase
+        // First check if document exists
+        const { data: existingDoc, error: checkError } = await supabase
+            .from('asset_documents')
+            .select('id, file_name')
+            .eq('id', documentId)
+            .single();
+
+        if (checkError || !existingDoc) {
+            console.error('Document not found:', documentId);
+            return NextResponse.json({ error: 'Document non trouvé' }, { status: 404 });
+        }
+
+        console.log(`📄 Found document: ${existingDoc.file_name}`);
+
+        // Delete chunks first (in case cascade doesn't work)
+        const { error: chunksError } = await supabase
+            .from('document_chunks')
+            .delete()
+            .eq('document_id', documentId);
+
+        if (chunksError) {
+            console.error('Error deleting chunks:', chunksError);
+        } else {
+            console.log('✅ Chunks deleted');
+        }
+
+        // Delete document
+        const { error, count } = await supabase
             .from('asset_documents')
             .delete()
-            .eq('id', documentId);
+            .eq('id', documentId)
+            .select();
 
         if (error) {
             console.error('Error deleting document:', error);
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
+
+        console.log(`✅ Document deleted: ${existingDoc.file_name}`);
 
         return NextResponse.json({
             success: true,

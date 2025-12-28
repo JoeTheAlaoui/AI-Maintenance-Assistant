@@ -1,5 +1,6 @@
 // app/api/ingest/route.ts
 // SSE Streaming Ingest with Parallel OCR and Optimized Processing
+// 🆕 Phase 11: Duplicate detection, tiered extraction, caching
 
 import { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
@@ -9,6 +10,9 @@ import { estimatePageNumber } from '@/lib/rag/chunker';
 import { extractAssetMetadata } from '@/lib/rag/metadata-extractor';
 import { extractPDFText } from '@/lib/rag/pdf-extractor';
 import { classifyDocument } from '@/lib/rag/document-classifier';
+import { generateDependencySuggestions } from '@/lib/dependencies/suggestions';
+import { generateDocumentFingerprint, checkDuplicateDocument, storeDocumentFingerprint } from '@/lib/cache/document-fingerprint'; // 🆕
+import { extractWithTieredApproach } from '@/lib/extraction/tiered-extractor'; // 🆕
 import { v4 as uuidv4 } from 'uuid';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import type { Document } from '@langchain/core/documents';
@@ -567,6 +571,51 @@ export async function POST(request: NextRequest) {
                 const arrayBuffer = await file.arrayBuffer();
                 const buffer = Buffer.from(arrayBuffer);
 
+                // 🆕 PHASE 11: Check for duplicate BEFORE processing
+                const fingerprint = generateDocumentFingerprint(buffer);
+
+                // Try to get organization_id from asset or user
+                let organizationId: string | null = null;
+                if (assetIdParam) {
+                    const { data: assetData } = await supabase
+                        .from('assets')
+                        .select('organization_id')
+                        .eq('id', assetIdParam)
+                        .single();
+                    organizationId = assetData?.organization_id || null;
+                }
+
+                if (!organizationId) {
+                    const { data: profileData } = await supabase
+                        .from('profiles')
+                        .select('organization_id')
+                        .eq('id', user.id)
+                        .single();
+                    organizationId = profileData?.organization_id || null;
+                }
+
+                if (organizationId) {
+                    const duplicateCheck = await checkDuplicateDocument(supabase, fingerprint, organizationId);
+
+                    if (duplicateCheck.isDuplicate) {
+                        const existing = duplicateCheck.existingDocument!;
+                        console.log(`⚠️ DUPLICATE DETECTED: Already imported as ${existing.file_name}`);
+
+                        sendProgress({
+                            stage: ImportStage.ERROR,
+                            progress: 0,
+                            message: `Ce document a déjà été importé pour "${existing.asset_name}" le ${new Date(existing.uploaded_at).toLocaleDateString('fr-FR')}`,
+                            result: {
+                                error: 'duplicate',
+                                existingDocument: existing,
+                            }
+                        });
+                        controller.close();
+                        return;
+                    }
+                }
+                console.log('✅ Document uniqueness verified');
+
                 // Progress callback for OCR
                 const onOCRProgress = (currentPage: number, totalPages: number, message: string) => {
                     const ocrProgress = 15 + Math.floor((currentPage / totalPages) * 45);
@@ -638,16 +687,18 @@ ${'-'.repeat(50)}
                     return;
                 }
 
-                // 4. Extract metadata
+                // 4. Extract metadata with TIERED APPROACH (Cache → Regex → AI)
                 sendProgress({
                     stage: ImportStage.METADATA,
                     progress: 68,
                     message: 'Extraction des métadonnées...',
-                    currentStep: 'Analyse IA...',
+                    currentStep: 'Analyse intelligente...',
                 });
 
-                const metadata = await extractAssetMetadata(extraction.text);
+                // 🆕 PHASE 11: Use tiered extraction to reduce API costs
+                const metadata = await extractWithTieredApproach(supabase, extraction.text, file.name);
                 console.log('📋 Metadata:', JSON.stringify(metadata, null, 2));
+                console.log(`📊 Extraction method: ${metadata.method || 'standard'}`);
 
                 // 4b. Classify document
                 sendProgress({
@@ -685,15 +736,16 @@ ${'-'.repeat(50)}
                         .from('assets')
                         .insert({
                             id: assetId,
-                            name: metadata.name,
+                            name: metadata.name || file.name.replace('.pdf', ''),
                             code: `${metadata.model || 'ASSET'}-${Date.now()}`,
                             location: 'À définir',
-                            manufacturer: metadata.manufacturer,
-                            model_number: metadata.model,
-                            serial_number: metadata.serial_number,
-                            category: metadata.category,
+                            manufacturer: metadata.manufacturer || null,
+                            model_number: metadata.model || null,
+                            serial_number: metadata.serial_number || null,
+                            category: metadata.category || 'Équipement',
                             status: 'operational',
                             created_by: user.id,
+                            organization_id: organizationId, // 🆕 Now we have this from earlier!
                         });
 
                     if (assetError) {
@@ -717,10 +769,11 @@ ${'-'.repeat(50)}
                         asset_id: assetId,
                         file_name: file.name,
                         file_size: file.size,
+                        file_fingerprint: fingerprint, // 🆕 For duplicate detection
                         processing_status: 'processing',
-                        document_type: documentType || classification.type, // User selection or AI classification
+                        document_type: documentType || classification.type,
                         document_type_confidence: documentType ? 1.0 : classification.confidence,
-                        user_confirmed: !!documentType, // True if user selected type
+                        user_confirmed: !!documentType,
                     });
 
                 if (docError) {
@@ -922,6 +975,35 @@ ${'-'.repeat(50)}
                     // Continue even if classification fails - document is still usable
                 } else {
                     console.log('✅ Document types saved:', detectedTypes);
+                }
+
+                // 🆕 Phase 9: Auto-extract dependency suggestions from document text
+                try {
+                    console.log('\n🔗 Starting dependency extraction...');
+
+                    // Get organization_id from asset
+                    const { data: assetData } = await supabase
+                        .from('assets')
+                        .select('organization_id')
+                        .eq('id', assetId)
+                        .single();
+
+                    if (assetData?.organization_id) {
+                        const suggestionsCount = await generateDependencySuggestions(
+                            supabase,
+                            documentId,
+                            assetId,
+                            metadata.name || file.name,
+                            cleanedText,
+                            assetData.organization_id
+                        );
+                        console.log(`✅ Generated ${suggestionsCount} dependency suggestions`);
+                    } else {
+                        console.log('⚠️ No organization_id found, skipping dependency extraction');
+                    }
+                } catch (depError) {
+                    console.error('⚠️ Dependency extraction failed (non-blocking):', depError);
+                    // Continue - dependency extraction is optional
                 }
 
                 const totalTime = Date.now() - startTime;

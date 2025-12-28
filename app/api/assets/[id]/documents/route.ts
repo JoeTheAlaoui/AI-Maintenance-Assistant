@@ -30,6 +30,7 @@ export async function GET(
             .from('asset_documents')
             .select(`
                 id,
+                asset_id,
                 file_name,
                 file_size,
                 document_type,
@@ -41,7 +42,13 @@ export async function GET(
                 processing_status,
                 total_chunks,
                 created_at,
-                processed_at
+                processed_at,
+                version,
+                is_latest,
+                supersedes,
+                superseded_by,
+                version_notes,
+                archived_at
             `)
             .eq('asset_id', assetId)
             .order('created_at', { ascending: false });

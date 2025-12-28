@@ -1,5 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { QueryAnalysis } from './query-analyzer';
+import { traverseDependencies, formatDependencyChain, DependencyChain } from '@/lib/dependencies/graph-traversal';
+import { getCached, setCached, getCacheKey } from '@/lib/dependencies/cache';
 
 export interface Equipment {
     id: string;
@@ -181,4 +183,40 @@ ${downstreamLines.join('\n')}
 
 Note: Search results include documentation from connected equipment when relevant for troubleshooting.
 When analyzing issues, consider the entire process chain.`;
+}
+
+/**
+ * 🆕 Phase 8: Get multi-hop dependency context (up to 3 levels deep)
+ * Uses caching for performance
+ */
+export async function getMultiHopDependencyContext(
+    supabase: SupabaseClient,
+    assetId: string,
+    maxDepth: number = 3
+): Promise<{ chain: DependencyChain | null; formatted: string }> {
+    try {
+        // Check cache first
+        const cacheKey = getCacheKey(assetId, maxDepth);
+        const cached = getCached<{ chain: DependencyChain; formatted: string }>(cacheKey);
+
+        if (cached) {
+            return cached;
+        }
+
+        // Traverse dependencies using multi-hop
+        const chain = await traverseDependencies(supabase, assetId, { maxDepth });
+
+        // Format for system prompt
+        const formatted = formatDependencyChain(chain);
+
+        // Cache result
+        const result = { chain, formatted };
+        setCached(cacheKey, result);
+
+        return result;
+
+    } catch (error) {
+        console.error('Error getting multi-hop dependency context:', error);
+        return { chain: null, formatted: '' };
+    }
 }

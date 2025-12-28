@@ -1,9 +1,11 @@
 // lib/rag/smart-search.ts
 // Intelligent search that routes to the right sources based on query analysis
+// 🆕 Phase 6: Added document type filtering based on intent detection
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { generateEmbedding } from './embeddings';
 import { QueryAnalysis } from './query-analyzer';
+import { DocumentType, IntentDetectionResult } from './intent-detection';
 
 export interface SearchResult {
     content: string;
@@ -20,15 +22,25 @@ interface SmartSearchOptions {
     query: string;
     analysis: QueryAnalysis;
     maxResults?: number;
+    intentFilter?: IntentDetectionResult; // 🆕 Phase 6: Document type filtering
 }
 
 /**
  * Smart search that routes to different sources based on query analysis
  */
 export async function smartSearch(options: SmartSearchOptions): Promise<SearchResult[]> {
-    const { supabase, assetId, query, analysis, maxResults = 15 } = options;
+    const { supabase, assetId, query, analysis, maxResults = 15, intentFilter } = options;
 
     const results: SearchResult[] = [];
+
+    // 🆕 Phase 6: Log intent filtering
+    if (intentFilter) {
+        console.log('🎯 Intent Filter:', {
+            types: intentFilter.detectedTypes,
+            confidence: intentFilter.confidence,
+            keywords: intentFilter.keywords.slice(0, 3),
+        });
+    }
 
     // Generate enhanced query embedding
     const enhancedQuery = buildEnhancedQuery(query, analysis);
@@ -44,11 +56,24 @@ export async function smartSearch(options: SmartSearchOptions): Promise<SearchRe
             query_embedding: `[${queryEmbedding.join(',')}]`,
             match_asset_id: assetId,
             match_threshold: 0.25,
-            match_count: 10,
+            match_count: intentFilter ? 20 : 10, // 🆕 Fetch more if filtering
         });
 
         if (docChunks) {
             for (const chunk of docChunks) {
+                // 🆕 Phase 6: Apply document type filtering
+                if (intentFilter && intentFilter.confidence !== 'low') {
+                    const chunkTypes: string[] = chunk.metadata?.document_types || ['manual'];
+                    const hasMatchingType = intentFilter.detectedTypes.some(
+                        type => chunkTypes.includes(type)
+                    );
+
+                    // Skip chunks that don't match the intent types
+                    if (!hasMatchingType) {
+                        continue;
+                    }
+                }
+
                 results.push({
                     content: chunk.content,
                     source_type: 'manual',
@@ -57,6 +82,14 @@ export async function smartSearch(options: SmartSearchOptions): Promise<SearchRe
                     similarity: chunk.similarity,
                     metadata: chunk.metadata,
                 });
+            }
+
+            // 🆕 Log filtering stats
+            if (intentFilter && intentFilter.confidence !== 'low') {
+                const filtered = docChunks.length - results.length;
+                if (filtered > 0) {
+                    console.log(`🔎 Type filtering: Kept ${results.length}/${docChunks.length} chunks (filtered ${filtered})`);
+                }
             }
         }
     } catch (err) {
